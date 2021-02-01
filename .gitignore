@@ -27,6 +27,13 @@
 *.lib
 
 # Executables
+buftest
 *.exe
 *.out
 *.app
+
+
+# working
+/obj
+*.code-workspace
+
