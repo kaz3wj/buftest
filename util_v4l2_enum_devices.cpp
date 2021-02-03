@@ -62,22 +62,13 @@ void utv4l2_EnumDevices::doEnum(UTV4L2_ENUMDEVICE_CB cb)
 			_cameras++;
 
 			if(ioctl(fd, VIDIOC_QUERYCAP, &video_cap) == -1){
-					cout << "cam_info: Can't get capabilities";
+					// cout << "cam_info: Can't get capabilities";
+					break;
 			}
 			else {
-					cout << "driver: '" << video_cap.driver << "'" << endl;
-					cout << "card  : '" << video_cap.card << "'" << endl;
+				cout << device_name << ":" << endl;
+				cout << "  driver: '" << video_cap.driver << "'" << endl;
+				cout << "  card  : '" << video_cap.card << "'" << endl;
 			}
-
-			// if(ioctl(fd, VIDIOCGWIN, &video_win) == -1)
-			// 		perror("cam_info: Can't get window information");
-			// else
-			// 		printf("Current size:\t%d x %d\n", video_win.width, video_win.height);
-
-			// if(ioctl(fd, VIDIOCGPICT, &video_pic) == -1)
-			// 		perror("cam_info: Can't get picture information");
-			// else
-			// 		printf("Current depth:\t%d\n", video_pic.depth);
-			// }
 		}
 }
