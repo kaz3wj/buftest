@@ -23,6 +23,7 @@ public:
 public:
 	const int32_t preview_width() { return _ww; }
 	const int32_t preview_height() { return _hh; }
+
 	const bool useCUI() { return b_use_cui; }
 	const int32_t page_count() {return _page_count;}
 	const int32_t timeout() { return _timeout; }
@@ -33,6 +34,7 @@ public:
 	const bool useThread() { return b_use_thread; }
 	const bool useImageEventHandler() { return b_use_utImageEventHandler; }
 	const bool useOSD() { return b_use_osd; }
+	const bool isDryrun() { return b_dryrun;  }
 
 private:
 	void set_default(void);

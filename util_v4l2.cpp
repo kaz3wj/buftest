@@ -41,8 +41,8 @@ utV4l2_Camera::utV4l2_Camera( int32_t dev_video_no, utContext* context)
 			_height(context->preview_height()), 
 			_dev_no(dev_video_no),
 			_page_count(context->page_count()),
-			_poll_timeout(context->timeout()), 
-			_loop_count(context->grab_count()),
+			// _poll_timeout(context->timeout()), 
+			// _loop_count(context->grab_count()),
 			_type(V4L2_BUF_TYPE_VIDEO_CAPTURE)
 
 // utV4l2_Camera::utV4l2_Camera( int32_t dev_video_no, int32_t w, int32_t h, 

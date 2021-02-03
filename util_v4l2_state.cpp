@@ -62,13 +62,20 @@ utV4l2_State *utV4l2_State::instance()
  * @note 
 */
 utV4l2Stat_Closed* utV4l2Stat_Closed::_pseudoThis = NULL;
+
+/**
+ * @brief 
+ * @param 
+ * @return 
+ * @note 
+*/
 bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 { 
 	// cout << "uutV4l2Stat_Closed::do_open: " << camera->dev_name() << std::endl;
 	int ret = -1;
 	std::string cap;
 	bool bDebugOut = (0==camera->_dev_no);
-	bool bDryrun  = camera->_ctx_param;
+	bool bDryrun  = camera->_ctx_param->isDryrun();
 
 	std::string name_to_open = camera->dev_name();
 
@@ -173,6 +180,15 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 
 	// malloc preparation (check cuda free mem)
 	if (bDebugOut) {
+
+		void *dataTmp;
+
+		// cudaMemRangeGetAttribute(dataTmp,
+		// 												 size_t dataSize,
+		// 												 enum cudaMemRangeAttribute attribute,
+		// 												 const void *devPtr,
+		// 												 size_t count);
+
 		size_t free_mem, total_mem;
 		cudaMemGetInfo(&free_mem, &total_mem);
 		cout << UTCOL_GREEN 
@@ -329,15 +345,23 @@ bool utV4l2Stat_Opened::do_close(utV4l2_Camera *camera)
 bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 {
 	utTimer("do_start");
-	
+
+	bool bDryrun  = camera->_ctx_param->isDryrun();
+
+	int ret;
 	// cout << "uutV4l2Stat_Opened::do_start(): " << camera->dev_name() << std::endl;
 
-	int ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_STREAMON, &camera->_type);
-	if(ret<0) {
-		utV4l2_Camera::error_text("Failed to start streaming: VIDIOC_STREAMON");
-		return false;
+	if (bDryrun) {
+		cout << UTCOL_BLUE << "VIDIOC_STREAMON" << UTCOL_WHITE << endl;
 	}
-	cout << UTCOL_CYAN << "VIDIOC_STREAMON" << UTCOL_WHITE << endl;
+	else {
+		ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_STREAMON, &camera->_type);
+		if(ret<0) {
+			utV4l2_Camera::error_text("Failed to start streaming: VIDIOC_STREAMON");
+			return false;
+		}
+		cout << UTCOL_CYAN << "VIDIOC_STREAMON" << UTCOL_WHITE << endl;
+	}
 
 	// wait a little...
 	usleep(200);
@@ -347,8 +371,8 @@ bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 	struct pollfd fds[1];
 	fds[0].fd = camera->_fd;
 	fds[0].events = POLLIN;
-	int32_t poll_timeout = camera->_poll_timeout;
-
+	int32_t poll_timeout = camera->_ctx_param->timeout();
+	
 	uint32_t dur_dq = 0;
 	uint32_t dur_eq = 0;
 	uint32_t dur_frame = 0;
@@ -357,7 +381,7 @@ bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 	int32_t frame = 0;
 	int32_t proc_step = 10;
 
-	int32_t max_loop = camera->_loop_count;
+	int32_t max_loop = camera->_ctx_param->grab_count();
 
 	utTimer tFrame("CAPTURE", false);
 	/* Wait for camera event with timeout */
@@ -388,23 +412,36 @@ bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 					/* Dequeue a camera buff */
 					{
 						utTimer t("VIDIOC_DQBUF", false);
-						ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_DQBUF, &buf);
-						if (ret < 0) {
-							utV4l2_Camera::error_text("Failed to dequeue camera buff: VIDIOC_DQBUF");
-							result = false;
-							break;
+						if (bDryrun) {
+						}
+						else {
+							ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_DQBUF, &buf);
+							if (ret < 0) {
+								utV4l2_Camera::error_text("Failed to dequeue camera buff: VIDIOC_DQBUF");
+								result = false;
+								break;
+							}
 						}
 						dur_dq += t.elapsed();
 					}
 
+
+
+
+
+
 					/* Enqueue camera buffer back to driver */
 					{
 						utTimer t("VIDIOC_QBUF", false);
-						ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_QBUF, &buf);
-						if (ret < 0){
-							utV4l2_Camera::error_text("Failed to queue camera buffers: VIDIOC_QBUF");
-							result = false;
-							break;
+						if (bDryrun) {
+						}
+						else {
+							ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_QBUF, &buf);
+							if (ret < 0){
+								utV4l2_Camera::error_text("Failed to queue camera buffers: VIDIOC_QBUF");
+								result = false;
+								break;
+							}
 						}
 						dur_eq += t.elapsed();
 					}
@@ -422,12 +459,17 @@ bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 		}
 	}
 
-	ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_STREAMOFF, &(camera->_type));
-	if (ret<0) {
-		utV4l2_Camera::error_text("Failed to stop streaming: VIDIOC_STREAMOFF");
-		return false;
+	if (bDryrun) {
+		cout << UTCOL_BLUE << "VIDIOC_STREAMOFF" << UTCOL_WHITE << endl;
 	}
-	cout << UTCOL_CYAN << "VIDIOC_STREAMOFF" << UTCOL_WHITE << endl;
+	else {
+		ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_STREAMOFF, &(camera->_type));
+		if (ret<0) {
+			utV4l2_Camera::error_text("Failed to stop streaming: VIDIOC_STREAMOFF");
+			return false;
+		}
+		cout << UTCOL_CYAN << "VIDIOC_STREAMOFF" << UTCOL_WHITE << endl;
+	}
 	return result;
 }
 

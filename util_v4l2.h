@@ -69,8 +69,8 @@ class utV4l2_Camera
         bool _bExit;
         bool _debug_push_pop;
         //
-        int32_t _poll_timeout;
-        int32_t _loop_count;
+        // int32_t _poll_timeout;
+        // int32_t _loop_count;
 
         std::vector<uint8_t*> _buf;
 };
