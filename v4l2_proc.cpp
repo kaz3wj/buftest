@@ -1,10 +1,12 @@
 #include <iostream>
 #include <thread>
+#include <stdexcept>
+
 // Include files to use the pylon API.
-#include <pylon/PylonIncludes.h>
-#ifdef PYLON_WIN_BUILD
-#    include <pylon/PylonGUI.h>ifndef
-#endif
+// #include <pylon/PylonIncludes.h>
+// #ifdef PYLON_WIN_BUILD
+// #    include <pylon/PylonGUI.h>ifndef
+// #endif
 
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -17,11 +19,12 @@
 
 #include "util_class.h"
 #include "util_v4l2.h"
+#include "util_v4l2_enum_devices.h"
 #include "v4l2_proc.h"
 #include "core_test_extn.h"
 
 // Namespace for using pylon objects.
-using namespace Pylon;
+// using namespace Pylon;
 
 // Namespace for OpenCV
 using namespace cv;
@@ -50,11 +53,8 @@ int do_v4l2_proc(utContext* context)
 
     try
     {
-        CTlFactory& tlFactory = CTlFactory::GetInstance();
-        DeviceInfoList_t devices;
-        if ( tlFactory.EnumerateDevices(devices) == 0 ){
-            throw RUNTIME_EXCEPTION( "No camera present.");
-        }
+        utv4l2_EnumDevices devices;
+        devices.doEnum();
 
         if (b_use_thread) 
         {
@@ -100,18 +100,18 @@ int do_v4l2_proc(utContext* context)
                 for (utV4l2_Camera* cam : cameras) {
                     cout << "init CAMERA" << endl;
                     if (!cam->open()) {
-                        throw RUNTIME_EXCEPTION( "Initialize/Open camera failure.");
+                        throw std::runtime_error( "Initialize/Open camera failure.");
                     }
                 }
                 dur_init = t.elapsed();
             }
         }
     }
-    catch (const GenericException &e)
+    catch (std::runtime_error &e)
     {
         // Error handling
         cerr << "An exception occurred." << endl
-        << e.GetDescription() << endl;
+        << e.what() << endl;
         exitCode = 1;
     }
 

@@ -11,6 +11,7 @@ class utV4l2Stat_Opened;
 class utV4l2Stat_Running;
 class utContext;
 
+
 //////////////////////////////////////////////
 
 class utV4l2_Camera
