@@ -53,14 +53,18 @@ void utContext::set_default(void)
 	_cam_pixfmt = V4L2_PIX_FMT_NV16;
 	_buf_memory_type = V4L2_MEMORY_USERPTR;
 
-	b_use_thread = true;
-	b_use_osd = false;
-	b_output_list = false;
 	b_use_pylon = true;
-	// b_use_gpu = false;
+	b_use_thread = true;
+	b_use_osd = true;
+	b_output_list = false;
 	b_use_cui = false;
+	// using utImageHandler
+	b_use_utImageEventHandler = false;
 	b_debug = false;
+	b_verbose = false;
+	b_dryrun = false;
 }
+
 
 /**
  * @brief 
@@ -69,8 +73,14 @@ void utContext::set_default(void)
  * @note 
 */
 utContext *utContext::_pseudoThis = NULL;
-//
 
+
+/**
+ * @brief 
+ * @param 
+ * @return 
+ * @note 
+*/
 utContext * utContext::get_instance()
 {
 	if (!_pseudoThis) {
@@ -94,15 +104,13 @@ int utContext::proc(void)
 	// the pylon runtime must be initialized. 
 	PylonInitialize();
 
-	if (!b_debug){
-		if (b_use_pylon) {
-			exitCode = do_pylon_proc(this);
-		}
-		else {
-			exitCode = do_v4l2_proc(this);
-			//ww, hh, b_use_cui, page_count, timeout, loop_count );
-		}
+	if (b_use_pylon) {
+		exitCode = do_pylon_proc(this);
 	}
+	else {
+		exitCode = do_v4l2_proc(this);
+	}
+
 	// Releases all pylon resources. 
 	PylonTerminate();
 	return exitCode;
@@ -159,17 +167,6 @@ bool utContext::parse_args(int argc, char *argv[])
 					_page_count = stol(optarg);
 					std::cout << "page=" << to_string(_page_count) << endl;
 					break;
-			
-																			
-				// case 'w':
-				// 		_ww = stol(optarg);
-				// 		std::cout << "width=" << to_string(_ww) << endl;
-				// 		break;
-
-				// case 'h':
-				// 		_hh = stol(optarg);
-				// 		std::cout << "height=" << to_string(_hh) << endl;
-				// 		break;
 
 			case 't':
 					_timeout = stol(optarg);
@@ -214,6 +211,7 @@ bool utContext::parse_args(int argc, char *argv[])
 							return false;
 					}
 					break;
+
 			case 'm':
 				if (strcmp(optarg,"USER")==0) {
 					_buf_memory_type = V4L2_MEMORY_USERPTR;
@@ -245,13 +243,16 @@ bool utContext::parse_args(int argc, char *argv[])
 			printf ("\n");
 	}
 
+  b_dryrun = (1==_flag_dryrun);
 	b_use_pylon = (1==_flag_pylon);
 	b_use_thread = (1==_flag_thread);
 	b_use_osd = (1==_flag_osd);
 	// b_output_list = (1==_flag_list);
 	b_use_cui = (1 == _flag_cui);
 	b_use_utImageEventHandler = (1 == _flag_imagehandler);
-	b_debug = (1 == _flag_debug);
+	b_debug = (1==_flag_debug);
+	b_verbose = (1==_flag_verbose);
+
 	if (b_debug) {
 			cout << "[DEBUG]" << endl;
 	}
@@ -270,36 +271,42 @@ void utContext::print_usage(const char* name)
 
     std::vector<std::string> usage_list = 
     {
-        "--help            : this message",
-        "",
-        "ui:",
-        "  --cui        : use console",
-        "  --gui        : use GUI(window)e",
+        "--help         : this message",
         "",
         "mode:",
-        "  --pylon          : use Pylon framework(default)",
-        "  --v4l2           : use V4L2 framework",
+        "  --pylon      : use Pylon framework(default)",
+        "  --v4l2       : use V4L2 framework",
+				"  --dryrun     : dry-run mode",
         "",
-        "gpu:",
-        "  --gpu            : use CUDA feature",
+        "user interface:",
+        "  --cui        : use console",
+        "  --gui        : use GUI(window)",
         "",
         "buffer:",
-        "  --page            : buffer page count",
-        "  --dmabuf          : V4L2_MEMORY_DMABUF",
-        "  --userptr         : V4L2_MEMORY_USERPTR",
-        "  --mmap            : V4L2_MEMORY_MMAP",
+        "  --page       : buffer page count",
+        "  --dmabuf     : V4L2_MEMORY_DMABUF",
+        "  --userptr    : V4L2_MEMORY_USERPTR",
+        "  --mmap       : V4L2_MEMORY_MMAP",
         "",
         "threading:",
-        "  --multi          : enable multi thread mode(default)",
-        "  --single         : enable single thread mode",
+        "  --multi      : enable multi thread mode(default)",
+        "  --single     : enable single thread mode",
         "",
+				"",
         "options:",
-        "  --width           : preview width in pixel",
-        "  --height          : preview height in pixel"
-        "  --osd             : enable OSD on the window",
-        "  --image-handler   : use ImageHandler",
-        "  --max-count       : max camera device count",
-        "  --list            : display device list", 
+        "  --osd        : enable OSD on the window",
+        "  --ihandler   : use ImageHandler",
+        "  --max-count  : max camera device count",
+        "  --list       : display device list", 
+
+				"  -c [camera_count]",
+				"  -p [pages]",
+				"  -t [timepit]       : poll-timeout in msec",
+				"  -l [frame_to_grab] : frame_to_grab",
+        "  -s [w]x[h]         : preview size in pixel",
+				"  -f [pixel format]  : YUYV, YVYU, VYUY, UYVY,"
+				"                       GREY, MJPEG, NV16, NV12"
+				"  -m [buffer mode]   : USER, DMA, MMAP"
     };
 
     for (std::string s : usage_list) {
@@ -314,9 +321,9 @@ void utContext::print_usage(const char* name)
  * @return 
  * @note 
 */
-static void print_args(int argc, char* argv[]) 
+void utContext::print_args(int argc, char* argv[]) 
 {
-    for (int i=0; i<argc; i++) {
-        cout << "arg[" << to_string(i) << "] " << argv[i] << endl;
-    }
+	for (int i=0; i<argc; i++) {
+			cout << "arg[" << to_string(i) << "] " << argv[i] << endl;
+	}
 }

@@ -9,15 +9,14 @@ class utV4l2_State;
 class utV4l2Stat_Closed;
 class utV4l2Stat_Opened;
 class utV4l2Stat_Running;
+class utContext;
 
 //////////////////////////////////////////////
 
 class utV4l2_Camera
 {
     public:
-        utV4l2_Camera(int32_t dev_video_no, int32_t width, int32_t height, 
-                        int32_t page_count=4, int32_t time_out=5000,
-                        int32_t loop_count=-1);
+        utV4l2_Camera(int32_t dev_video_no, utContext* context);
         virtual ~utV4l2_Camera();
 
     // state
@@ -53,6 +52,8 @@ class utV4l2_Camera
         static std::string fourcc_text(uint32_t code);
 
     private:
+        utContext* _ctx_param;
+
         enum v4l2_buf_type _type;
 
         int _fd;

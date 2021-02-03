@@ -5,10 +5,8 @@
 #include <fcntl.h>              /* low-level i/o */
 #include <unistd.h>
 #include <errno.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
@@ -16,7 +14,7 @@
 #include <poll.h>
 #include <linux/videodev2.h>
 #include <cuda_runtime.h>
-#include "core_test_extref.h"
+#include "core_test_extn.h"
 #include "util_class.h"
 #include "util_v4l2.h"
 #include "util_v4l2_state.h"
@@ -70,6 +68,7 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 	int ret = -1;
 	std::string cap;
 	bool bDebugOut = (0==camera->_dev_no);
+	bool bDryrun  = camera->_ctx_param;
 
 	std::string name_to_open = camera->dev_name();
 
@@ -85,12 +84,17 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 
 	// init format
 	struct v4l2_format fmt, fmt1;
-
 	fmt1.type = camera->_type;
-	ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_G_FMT, &fmt1);
-	if (ret< 0) {
-		utV4l2_Camera::error_text("VIDIOC_G_FMT");
-		return false;
+
+	if (bDryrun) {
+		cout << UTCOL_BLUE << "VIDIOC_G_FMT" << endl;
+	}
+	else {
+		ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_G_FMT, &fmt1);
+		if (ret< 0) {
+			utV4l2_Camera::error_text("VIDIOC_G_FMT");
+			return false;
+		}
 	}
 
 	if (bDebugOut) {
@@ -124,14 +128,19 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 	// fmt.fmt.pix.field       = V4L2_FIELD_NONE;
 	fmt.fmt.pix.field = fmt1.fmt.pix.field;
 
-	ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_S_FMT, &fmt);
-	if(ret< 0 /*|| fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_NV16*/ ||
-		fmt.fmt.pix.width<=0 || fmt.fmt.pix.height<=0) {
-		utV4l2_Camera::error_text("VIDIOC_S_FMT");
-		return false;
+	if (bDryrun) {
+		cout << UTCOL_BLUE << "VIDIOC_S_FMT" << endl;
 	}
-	if (bDebugOut) {
-		cout << UTCOL_CYAN << "VIDIOC_S_FMT" << UTCOL_WHITE << endl;
+	else {
+		ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_S_FMT, &fmt);
+		if(ret< 0 /*|| fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_NV16*/ ||
+			fmt.fmt.pix.width<=0 || fmt.fmt.pix.height<=0) {
+			utV4l2_Camera::error_text("VIDIOC_S_FMT");
+			return false;
+		}
+		if (bDebugOut) {
+			cout << UTCOL_CYAN << "VIDIOC_S_FMT" << UTCOL_WHITE << endl;
+		}
 	}
 
 	// init buffer
@@ -140,20 +149,26 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 	req.type                = camera->_type;
 	req.memory              = V4L2_MEMORY_USERPTR;
 
-	if(utV4l2_Camera::xioctl(camera->_fd, VIDIOC_REQBUFS, &req) < 0) {
-		utV4l2_Camera::error_text("Failed to request v4l2 buffers: VIDIOC_REQBUFS");
-		return false;
-	}
-	if (req.count != camera->_page_count) {
-		cout << UTCOL_RED 
-			<< "V4l2 buffer number (" << to_string(req.count)
-			<<") is not as desired (" << to_string(camera->_page_count) << ")"
-			<< UTCOL_WHITE << endl;
-		return false;
-	}
 
-	if (bDebugOut) {
-		cout << UTCOL_CYAN << "VIDIOC_REQBUFS" << UTCOL_WHITE << endl;
+	if (bDryrun) {
+		cout << UTCOL_BLUE << "VIDIOC_REQBUFS" << endl;
+	}
+	else {
+		if(utV4l2_Camera::xioctl(camera->_fd, VIDIOC_REQBUFS, &req) < 0) {
+			utV4l2_Camera::error_text("Failed to request v4l2 buffers: VIDIOC_REQBUFS");
+			return false;
+		}
+		if (req.count != camera->_page_count) {
+			cout << UTCOL_RED 
+				<< "V4l2 buffer number (" << to_string(req.count)
+				<<") is not as desired (" << to_string(camera->_page_count) << ")"
+				<< UTCOL_WHITE << endl;
+			return false;
+		}
+
+		if (bDebugOut) {
+			cout << UTCOL_CYAN << "VIDIOC_REQBUFS" << UTCOL_WHITE << endl;
+		}
 	}
 
 	// malloc preparation (check cuda free mem)
@@ -200,35 +215,48 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 							{
 								struct v4l2_buffer buf;
 								CLEAR(buf);
-								buf.index		= ii;
-								buf.type		= camera->_type; //V4L2_BUF_TYPE_VIDEO_CAPTURE
-								buf.memory  = V4L2_MEMORY_USERPTR;
-								ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_QUERYBUF, &buf);
-								if(ret<0) {
-									utV4l2_Camera::error_text("Failed to query buff: VIDIOC_QUERYBUF");
-									return false;
-								}
 
-								if (bDebugOut) {
-									cout << UTCOL_CYAN << "VIDIOC_QUERYBUF: buffer len=" << to_string(buf.length) << " bytes" << UTCOL_WHITE << endl;
+								if (bDryrun) {
+									cout << UTCOL_BLUE << "VIDIOC_QUERYBUF" << endl;
+								}
+								else {
+
+									buf.index		= ii;
+									buf.type		= camera->_type; //V4L2_BUF_TYPE_VIDEO_CAPTURE
+									buf.memory  = V4L2_MEMORY_USERPTR;
+									ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_QUERYBUF, &buf);
+									if(ret<0) {
+										utV4l2_Camera::error_text("Failed to query buff: VIDIOC_QUERYBUF");
+										return false;
+									}
+
+									if (bDebugOut) {
+										cout << UTCOL_CYAN << "VIDIOC_QUERYBUF: buffer len=" << to_string(buf.length) << " bytes" << UTCOL_WHITE << endl;
+									}
 								}
 
 								// buffers[i].start = memalign(getpagesize (), alloc_size );
 								// buf.m.userptr = (unsigned long) buffers[i].start;
 								// printf("new pointer for buffer %d = %p\n", i, buffers[i].start);
 								//---<>
-								buf.m.userptr       = reinterpret_cast<unsigned long>( camera->_buf[ii]);
-								buf.length          = alloc_size;
-								{
-									ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_QBUF, &buf);
-									if(ret<0) {
-										utV4l2_Camera::error_text("Failed to enqueue buffers: VIDIOC_QBUF");
-										return false;
+
+								if (bDryrun) {
+									cout << UTCOL_BLUE << "VIDIOC_QUERYBUF" << endl;
+								}
+								else {
+									buf.m.userptr       = reinterpret_cast<unsigned long>( camera->_buf[ii]);
+									buf.length          = alloc_size;
+									{
+										ret = utV4l2_Camera::xioctl(camera->_fd, VIDIOC_QBUF, &buf);
+										if(ret<0) {
+											utV4l2_Camera::error_text("Failed to enqueue buffers: VIDIOC_QBUF");
+											return false;
+										}
+										if (bDebugOut) {
+											cout << UTCOL_CYAN << "VIDIOC_QBUF" << UTCOL_WHITE << endl;
+										}
+										dur_qbuf += t.elapsed();
 									}
-									if (bDebugOut) {
-										cout << UTCOL_CYAN << "VIDIOC_QBUF" << UTCOL_WHITE << endl;
-									}
-									dur_qbuf += t.elapsed();
 								}
 							}
 					}

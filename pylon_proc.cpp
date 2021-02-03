@@ -16,7 +16,7 @@
 #include <X11/Xos.h>
 
 #include "core_test_defs.h"
-#include "core_test_extref.h"
+#include "core_test_extn.h"
 
 #include "util_v4l2.h"
 #include "util_class.h"

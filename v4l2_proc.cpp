@@ -18,7 +18,7 @@
 #include "util_class.h"
 #include "util_v4l2.h"
 #include "v4l2_proc.h"
-#include "core_test_extref.h"
+#include "core_test_extn.h"
 
 // Namespace for using pylon objects.
 using namespace Pylon;
@@ -28,9 +28,6 @@ using namespace cv;
 
 // Namespace for using cout.
 using namespace std;
-
-// Number of images to be grabbed.
-const uint32_t c_countOfFrameToGrab = 10000;
 
 /**
  * @brief 
@@ -50,7 +47,6 @@ int do_v4l2_proc(utContext* context)
 
     int exitCode = 0;
     std::vector<utV4l2_Camera*> cameras;
-    // std::vector<std::string> caption_for_im;
 
     try
     {
@@ -60,8 +56,8 @@ int do_v4l2_proc(utContext* context)
             throw RUNTIME_EXCEPTION( "No camera present.");
         }
 
-        if (b_use_thread) {
-
+        if (b_use_thread) 
+        {
             auto thread_func = [](utV4l2_Camera& camera, const bool& bCUI) 
                                 {
                                     std::string name = camera.dev_name();
@@ -73,13 +69,12 @@ int do_v4l2_proc(utContext* context)
 
             size_t camera_count = min(devices.size(), c_maxCamerasToUse);
             for (size_t ii=0; ii<camera_count; ii++){
-                utV4l2_Camera* cam = new utV4l2_Camera(ii, ww, hh, buffer_count, timeout, frame_to_grab);
+                utV4l2_Camera* cam = new utV4l2_Camera(ii, context ); 
                 cameras.push_back(cam);
             }
 
             std::thread cam_control_threads[camera_count];
             for (size_t ii=0; ii<camera_count; ii++) {
-                // caption_for_im.push_back( cameras[ii]->dev_name() );
                 cam_control_threads[ii]= std::thread( thread_func, std::ref(*cameras[ii]),  std::cref(bUseCUI));
             }
             for (size_t ii=0; ii<camera_count; ii++) {
@@ -93,7 +88,7 @@ int do_v4l2_proc(utContext* context)
                 utTimer t("create", true);
                 for (size_t ii=0; ii< min( devices.size(), c_maxCamerasToUse); ii++) {
                     // cout << "Add [" << to_string(ii) << "] camera" << endl;
-                    cameras.push_back(new utV4l2_Camera(ii, ww, hh, buffer_count) );
+                    cameras.push_back( new utV4l2_Camera(ii, context) );
                 }
                 dur_create = t.elapsed();
             }

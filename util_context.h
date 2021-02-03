@@ -17,6 +17,8 @@ public:
 	bool parse_args(int argc, char *argv[]);
 	int proc(void);
 
+	static void print_args(int argc, char* argv[]);
+
 	// attr
 public:
 	const int32_t preview_width() { return _ww; }
@@ -59,6 +61,7 @@ private:
 	int32_t _cam_pixfmt;
 
 	bool b_use_pylon;
+	bool b_verbose;
 	bool b_use_thread;
 	bool b_use_osd;
 	bool b_output_list;
@@ -66,9 +69,10 @@ private:
 	// using utImageHandler
 	bool b_use_utImageEventHandler;
 	bool b_debug;
+	bool b_dryrun;
 
-	int _f_debug_out;
 	int _flag_verbose;
+	int _flag_dryrun;
 	int _flag_pylon;
 	int _flag_gpu;
 	int _flag_cui;
@@ -77,9 +81,10 @@ private:
 	int _flag_debug;
 	int _flag_imagehandler;
 
-	const struct option longopts[21] =
-			{{// flag
-				"verbose", no_argument, &_flag_verbose, 1},
+	const struct option longopts[20] = {
+			 {"dryrun", no_argument, &_flag_dryrun, 1},
+			 {"verbose", no_argument, &_flag_verbose, 1},
+			 {"debug", no_argument, &_flag_debug, 1},
 			 {"pylon", no_argument, &_flag_pylon, 1},
 			 {"v4l2", no_argument, &_flag_pylon, 0},
 			 {"gpu", no_argument, &_flag_gpu, 1},
@@ -89,17 +94,15 @@ private:
 			 {"osd", no_argument, &_flag_osd, 1},
 			 {"multi", no_argument, &_flag_thread, 1},
 			 {"single", no_argument, &_flag_thread, 0},
-			 {"debug", no_argument, &_flag_debug, 1},
 			 {"image-handler", no_argument, &_flag_imagehandler, 1},
 			 {"camera", required_argument, 0, 'c'},
 			 {"page", required_argument, 0, 'p'},
 			 {"bufmode", required_argument, 0, 'm'},
-			 {"width", required_argument, 0, 'w'},
-			 {"height", required_argument, 0, 'h'},
+			 {"size", required_argument, 0, 's'},
 			 {"timeout", required_argument, 0, 't'},
 			 {"loop", required_argument, 0, 'l'},
-			 {//termination
-				NULL, 0, NULL, 0}};
+			 { NULL, 0, NULL, 0}
+			 };
 };
 
 #endif //__UTIL_CONTEXT_H__INCLUDED__
