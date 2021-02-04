@@ -29,7 +29,6 @@
 #define PADDING_SPACES 25
 
 
-
 /*****************************************************************************
 
  *****************************************************************************/
@@ -37,7 +36,8 @@ class utTimer
 {
 // ctor, dtor
 public:
-	utTimer(const std::string& name = "_no_name_", bool bOutputOnTerminate = false);
+	utTimer(const std::string& name = "_no_name_", 
+          bool bOutputOnTerminate = false);
 	virtual ~utTimer();
 
 //Attributes
@@ -50,8 +50,17 @@ public:
 };
 
 
-template< typename T >
-std::string int_to_hex( T i )
+
+/*****************************************************************************
+
+ *****************************************************************************/
+
+/*****************************************************************************
+
+ *****************************************************************************/
+
+template <typename T>
+std::string int_to_hex(T i)
 {
   std::stringstream stream;
   stream << "0x" 

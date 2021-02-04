@@ -28,6 +28,8 @@ public:
 	const int32_t page_count() {return _page_count;}
 	const int32_t timeout() { return _timeout; }
 
+	int32_t pix_format() { return _cam_pixfmt;  }
+
 	// Number of images to be grabbed.
 	const int32_t grab_count() { return _frame_to_grab; }
 

@@ -10,17 +10,17 @@
 #include <string.h>
 #include <iostream>
 #include <vector>
-// Include files to use the pylon API.
-#include <pylon/PylonIncludes.h>
-#ifdef PYLON_WIN_BUILD
-#    include <pylon/PylonGUI.h>ifndef
-#endif
+// // Include files to use the pylon API.
+// #include <pylon/PylonIncludes.h>
+// #ifdef PYLON_WIN_BUILD
+// #    include <pylon/PylonGUI.h>ifndef
+// #endif
 #include "v4l2_proc.h"
 #include "pylon_proc.h"
 #include "util_context.h"
 
 using namespace std;
-using namespace Pylon;
+// using namespace Pylon;
 
 bool utContext::g_quit = false;
 const char* utContext::optstring = "hc:p:t:l:s:f:m:";
@@ -44,12 +44,14 @@ utContext::utContext()
 */
 void utContext::set_default(void)
 {
-	_ww = 1280;
-	_hh = 720;
+	_ww = 640;
+	_hh = 360;
+	// _ww = 1280;
+	// _hh = 720;
 	_page_count = 4;
 	_camera_count = 2;
 	_timeout = 5000;
-	_frame_to_grab = -1;
+	_frame_to_grab = 300;
 	_cam_pixfmt = V4L2_PIX_FMT_NV16;
 	_buf_memory_type = V4L2_MEMORY_USERPTR;
 
@@ -100,19 +102,12 @@ int utContext::proc(void)
 {
 	int exitCode = -1;
 
-	// Before using any pylon methods, 
-	// the pylon runtime must be initialized. 
-	PylonInitialize();
-
 	if (b_use_pylon) {
 		exitCode = do_pylon_proc(this);
 	}
 	else {
 		exitCode = do_v4l2_proc(this);
 	}
-
-	// Releases all pylon resources. 
-	PylonTerminate();
 	return exitCode;
 }
 
@@ -301,7 +296,7 @@ void utContext::print_usage(const char* name)
 
 				"  -c [camera_count]",
 				"  -p [pages]",
-				"  -t [timepit]       : poll-timeout in msec",
+				"  -t [poll timeout] : poll-timeout in msec",
 				"  -l [frame_to_grab] : frame_to_grab",
         "  -s [w]x[h]         : preview size in pixel",
 				"  -f [pixel format]  : YUYV, YVYU, VYUY, UYVY,"

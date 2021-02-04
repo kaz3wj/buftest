@@ -29,9 +29,6 @@
 
 using namespace std;
 
-
-
-
 /**
  * @brief 
  * @param 
@@ -40,26 +37,11 @@ using namespace std;
 */
 utV4l2_Camera::utV4l2_Camera( int32_t dev_video_no, utContext* context)
     : _ctx_param(context),
-			_width(context->preview_width()), 
-			_height(context->preview_height()), 
 			_dev_no(dev_video_no),
-			_page_count(context->page_count()),
-			// _poll_timeout(context->timeout()), 
-			// _loop_count(context->grab_count()),
 			_type(V4L2_BUF_TYPE_VIDEO_CAPTURE)
-
-// utV4l2_Camera::utV4l2_Camera( int32_t dev_video_no, int32_t w, int32_t h, 
-// 															int32_t page_count, int32_t timeout, int32_t loop_count)
-//     : _width(w), _height(h), _dev_no(dev_video_no),_page_count(page_count),
-// 			_poll_timeout(timeout), 
-// 			_loop_count(loop_count),
-// 			_type(V4L2_BUF_TYPE_VIDEO_CAPTURE)
-
 {
-	cout << "utV4l2_Camera" << endl;
 	_pushed	= 0;
 	_popped = 0;
-	_bExit = false;
 	_debug_push_pop = false;
 	_state = utV4l2Stat_Closed::instance();
 }
@@ -125,7 +107,7 @@ std::string utV4l2_Camera::fourcc_text(uint32_t code)
 {
 	std::string s = "'";
 	for (int ii=0; ii<4; ii++) {
-		uint8_t c = (code>>8*ii) & 0xff;
+		uint8_t c = (code>>(8*ii)) & 0xff;
 		s += c;
 	}
 	s += "'";
@@ -139,7 +121,6 @@ std::string utV4l2_Camera::fourcc_text(uint32_t code)
  * @return 
  * @note 
 */
-
 void utV4l2_Camera::list_formats(int fh)
 {
     struct v4l2_fmtdesc fmt;
@@ -189,7 +170,6 @@ bool utV4l2_Camera::open(void)
  * @return 
  * @note 
 */
-
 bool utV4l2_Camera::close(void)
 {
 	cout << "[" << this->dev_name() << "] "  << "CLOSE" << endl;
@@ -198,18 +178,6 @@ bool utV4l2_Camera::close(void)
 		change_state(utV4l2Stat_Closed::instance());
 	}
 	return result;
-}
-
-
-/**
- * @brief dtor
- * @param 
- * @return 
- * @note 
-*/
-utV4l2_Camera::~utV4l2_Camera()
-{
-	// cout << "~V4l2_Camera" << endl;
 }
 
 

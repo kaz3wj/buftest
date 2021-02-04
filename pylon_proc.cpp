@@ -20,7 +20,9 @@
 
 #include "util_v4l2.h"
 #include "util_class.h"
+#include "util_context.h"
 #include "v4l2_proc.h"
+#include "util_v4l2_state.h"
 #include "pylon_proc.h"
 
 // Namespace for OpenCV
@@ -50,12 +52,12 @@ public:
     void set_index(uint32_t index)  {
         _index = index;
     }
-
     uint32_t _index;
 };
 
 
 static void disp_osd( 
+    utContext* ctx,
     cv::Mat cv_dst, 
     const Scalar& color_osd_background,
     CGrabResultPtr ptrGrabResult, 
@@ -74,12 +76,12 @@ static void disp_osd(
 */
 int do_pylon_proc( utContext *context )
 {
-    const int32_t ww = context->preview_width();
-    const int32_t hh = context->preview_height();
     const bool bUseCUI = context->useCUI();
     const bool b_use_osd = context->useOSD();
     const bool b_use_utImageEventHandler = context->useImageEventHandler();
     const int32_t frame_to_grab = context->grab_count();
+
+    cout << "grab_count: " << to_string(frame_to_grab) << endl;
 
     int exitCode = 0;
 
@@ -106,22 +108,26 @@ int do_pylon_proc( utContext *context )
         std::string caption_for_im[4];
         utTimer proc_timer[4];
 
-        if (context->useThread() /*b_use_thread*/) {
+        if (context->useThread()) {
 
-            auto thread_func = [](CInstantCamera& camera, 
-                                const std::string& caption,
-                                const int32_t& grab_count, 
-                                const int& w, 
-                                const int& h, 
-                                const size_t& index, 
-                                const bool& bDispInfo, 
-                                const bool& bCUI
+            auto thread_func = [](CInstantCamera &camera,
+                                  const std::string &caption,
+                                  const size_t &index,
+                                  utContext *context
                                 ) 
-            {
-                namedWindow(caption , WINDOW_NORMAL);
-                resizeWindow(caption , w, h);
+                            {
 
+                cout << UTCOL_CYAN << caption << endl;
+
+                int32_t grab_count = context->grab_count();
+
+
+                // cout << "Start Grabbing" << endl;
                 camera.StartGrabbing();
+
+                if (!camera.IsGrabbing()) {
+                    cout << UTCOL_RED << "FAILED: Grabbing" << endl;
+                }
 
                 CGrabResultPtr ptrGrabResult;
                 CPylonImage image;
@@ -131,6 +137,10 @@ int do_pylon_proc( utContext *context )
                 GenApi::CIntegerPtr width( camera.GetNodeMap().GetNode("Width"));
                 GenApi::CIntegerPtr height( camera.GetNodeMap().GetNode("Height"));
 
+                // if (context->preview_width() != width->GetValue()) {
+                //     cout << UTCOL_MAGENTA << "Not mathced: ctx.width=" << to_string(context->preview_width()) << ", Gen.Width()=" << to_string(width->GetValue()) << endl;
+                // }
+
                 cv::Mat cv_img( width->GetValue(), height->GetValue(), CV_8UC3);
 #ifdef _MY_USE_CV_CUDA
                 cv::cuda::GpuMat cv_cuda_img( width->GetValue(), height->GetValue(), CV_8UC3);
@@ -138,14 +148,18 @@ int do_pylon_proc( utContext *context )
                 uint32_t frame_count = 0;
                 utTimer proc_timer;
                 intptr_t cameraContextValue = -1;
-                bool bExitLoop = false;
 
-                for( int32_t i=0; i < grab_count && camera.IsGrabbing() && !bExitLoop; ++i)
+                // cout << UTCOL_YELLOW << "BEFORE LOOP" << endl;
+
+                for( int32_t i=0; (i<grab_count || -1==grab_count) && camera.IsGrabbing() && !utContext::g_quit; ++i)
                 {
                     camera.RetrieveResult( 5000, ptrGrabResult, TimeoutHandling_ThrowException);
 
-                    if (ptrGrabResult->GrabSucceeded()) 
-                    {
+                    if (ptrGrabResult->GrabSucceeded())   {
+                        // cout << UTCOL_BLUE << "Grab: " << to_string(ptrGrabResult->GetHeight()) << "x"<< to_string(ptrGrabResult->GetWidth()) << endl;
+
+                        const uint8_t *pImageBuffer = (uint8_t *) ptrGrabResult->GetBuffer();
+
                         cameraContextValue = ptrGrabResult->GetCameraContext();
                         uint32_t dur_convert = 0;
                         {
@@ -155,41 +169,41 @@ int do_pylon_proc( utContext *context )
                         }
 
                         cv_img = cv::Mat(ptrGrabResult->GetHeight(), ptrGrabResult->GetWidth(), CV_8UC3, (uint8_t *) image.GetBuffer());
-#ifdef _MY_USE_CV_CUDA
-                        cv_cuda_img = cv::cuda::GpuMat(ptrGrabResult->GetHeight(), ptrGrabResult->GetWidth(), CV_8UC3, (uint8_t *) image.GetBuffer());
-#endif
-
                         cv::Mat cv_dst;
-#ifdef _MY_USE_CV_CUDA
-                        cv::cuda::GpuMat cv_cuda_dst;
-#endif
                         uint32_t dur_resize = 0;
                         {
                             utTimer t("resize", false);
-                            resize(cv_img, cv_dst, cv::Size(w,h));
+                            resize(cv_img, cv_dst, cv::Size(context->preview_width(), context->preview_height()));
                             dur_resize = t.elapsed();
                         }
 
                         uint32_t dur_togray = 0;
-                        if ( 0 == cameraContextValue) {
-                            utTimer t("RGBtoGray", false);
-                            cvtColor(cv_dst, cv_dst, cv::COLOR_BGR2GRAY );
-                            dur_togray = t.elapsed();
-                        }
+                        // if ( 0 == cameraContextValue)
+                        // {
+                        //     utTimer t("RGBtoGray", false);
+                        //     cvtColor(cv_dst, cv_dst, cv::COLOR_BGR2GRAY );
+                        //     dur_togray = t.elapsed();
+                        // }
 
                         frame_count++;
 
-                        if (bDispInfo) {
+                        if (context->useOSD())
+                        {
+
+
                             int32_t frameToComplete = grab_count - i;
                             int32_t frame_rate = (int32_t) (1000.0 / ((float)(proc_timer.elapsed() / (float)frame_count)));
-                            disp_osd( cv_dst, CV_RGB(0x09,0x5E,0x20), ptrGrabResult, frameToComplete, dur_convert, dur_resize, dur_togray, frame_rate );
+                            disp_osd( context, cv_dst, CV_RGB(0x09,0x5E,0x20), ptrGrabResult, frameToComplete, dur_convert, dur_resize, dur_togray, frame_rate );
                         }
                         imshow(caption, cv_dst);
-                        bExitLoop = (waitKey(1) == CHAR_ESC);
+                        waitKey(1);
+                    }
+                    else {
+                        cout << UTCOL_RED << "Fail: Grab" << endl;
                     }
                 }
                 camera.StopGrabbing();
-                cout << "Terminated: " << caption<< std::endl;                                cout << "thread_func" << endl;
+                cout << "Terminated: " << caption<< std::endl;
             };
 
             std::vector<std::thread> cam_control_threads;
@@ -197,26 +211,30 @@ int do_pylon_proc( utContext *context )
             // Create and attach all Pylon Devices.
             for ( size_t i = 0; i < cameras.GetSize(); ++i) {
                 cameras[i].Attach( tlFactory.CreateDevice( devices[i]));
-                if (b_use_utImageEventHandler) {
-                    utImageEventHandler* pHandler = new utImageEventHandler;
-                    pHandler->set_index(i);
-                    cameras[i].RegisterImageEventHandler(pHandler, RegistrationMode_Append, Cleanup_Delete );
-                }
+
+                // if (b_use_utImageEventHandler) {
+                //     utImageEventHandler* pHandler = new utImageEventHandler;
+                //     pHandler->set_index(i);
+                //     cameras[i].RegisterImageEventHandler(pHandler, RegistrationMode_Append, Cleanup_Delete );
+                // }
+
                 caption_for_im[i] = "MultiThread [" + std::to_string(i+1) + "] ";
                 caption_for_im[i] += cameras[i].GetDeviceInfo().GetModelName() + " S/N:" + cameras[i].GetDeviceInfo().GetSerialNumber();
+                caption_for_im[i] += " " + to_string(context->preview_width()) + "x" + to_string(context->preview_height());
+
+                namedWindow(caption_for_im[i], WINDOW_NORMAL);
+                resizeWindow(caption_for_im[i], context->preview_width(), context->preview_height());
+
                 cam_control_threads.push_back(std::thread( 
                                                 thread_func, 
                                                 std::ref(cameras[i]), 
                                                 std::cref(caption_for_im[i]), 
-                                                std::cref(frame_to_grab),
-                                                std::cref(ww), std::cref(hh), 
                                                 std::cref(i),
-                                                std::cref(b_use_osd),
-                                                std::cref(bUseCUI) 
+                                                std::cref(context)
                                             ));
             }
-            // Join 
-            for ( std::thread& th : cam_control_threads ) {
+            // Join
+            for (std::thread &th : cam_control_threads){
                 th.join();
             }
         }
@@ -230,8 +248,9 @@ int do_pylon_proc( utContext *context )
                 caption_for_im[i] = "SingleThread [" + std::to_string(i+1) + "]";
                 caption_for_im[i] += cameras[i].GetDeviceInfo().GetModelName() + " S/N:" + cameras[i].GetDeviceInfo().GetSerialNumber();
                 namedWindow( caption_for_im[i] , WINDOW_NORMAL);
-                resizeWindow(caption_for_im[i] , ww, hh);
+                resizeWindow(caption_for_im[i] , context->preview_width(), context->preview_height());
             }
+
             cameras.StartGrabbing();
             // This smart pointer will receive the grab result data.
             CGrabResultPtr ptrGrabResult;
@@ -240,18 +259,13 @@ int do_pylon_proc( utContext *context )
             CImageFormatConverter fc;
             fc.OutputPixelFormat = PixelType_BGR8packed;
 
-            GenApi::CIntegerPtr width( cameras[0].GetNodeMap().GetNode("Wi, str::ref(b_use_cui)dth"));
+            GenApi::CIntegerPtr width( cameras[0].GetNodeMap().GetNode("Width"));
             GenApi::CIntegerPtr height( cameras[0].GetNodeMap().GetNode("Height"));
 
             Mat cv_img( width->GetValue(), height->GetValue(), CV_8UC3);
-#ifdef _MY_USE_CV_CUDA
-            cv::cuda::GpuMat cv_cuda_img( width->GetValue(), height->GetValue(), CV_8UC3);
-#endif
-            // Grab frame_to_grab from the cameras.
-            bool bExitLoop = false;
-            uint64_t timestamp = 0;
 
-            for( uint32_t i = 0; i < frame_to_grab && cameras.IsGrabbing() && !bExitLoop; ++i)
+            // Grab frame_to_grab from the cameras.
+            for( uint32_t i = 0; i < frame_to_grab && cameras.IsGrabbing() && !utContext::g_quit; ++i)
             {
                 cameras.RetrieveResult( 5000, ptrGrabResult, TimeoutHandling_ThrowException);
 
@@ -274,32 +288,28 @@ int do_pylon_proc( utContext *context )
 
                     cv_img = Mat(ptrGrabResult->GetHeight(), ptrGrabResult->GetWidth(), CV_8UC3, (uint8_t *) image.GetBuffer());
                     cv::Mat cv_dst;
-#ifdef _MY_USE_CV_CUDA
-                    cv_cuda_img = cv::cuda::GpuMat(ptrGrabResult->GetHeight(), ptrGrabResult->GetWidth(), CV_8UC3, (uint8_t *) image.GetBuffer());
-                    cv::cuda::GpuMat cv_cuda_dst;
-#endif
                     uint32_t dur_resize = 0;
                     {
                         utTimer t("resize", false);
-                        resize(cv_img, cv_dst, cv::Size(ww,hh));
+                        resize(cv_img, cv_dst, cv::Size(context->preview_width(),context->preview_height()));
                         dur_resize = t.elapsed();
                     }
 
                     uint32_t dur_togray = 0;
-                    if (0 == cameraContextValue) {
-                        utTimer t("RGBtoGray", false);
-                        cvtColor(cv_dst, cv_dst, cv::COLOR_BGR2GRAY );
-                        dur_togray = t.elapsed();
-                    }
+                    // if (0 == cameraContextValue) {
+                    //     utTimer t("RGBtoGray", false);
+                    //     cvtColor(cv_dst, cv_dst, cv::COLOR_BGR2GRAY );
+                    //     dur_togray = t.elapsed();
+                    // }
                     frame_counts[cameraContextValue]++;
 
                     if (b_use_osd) {
                         uint32_t frameToComplete = frame_to_grab - i;
                         uint32_t frame_rate = (uint32_t) (1000.0 / ((float)(proc_timer[cameraContextValue].elapsed() / (float)frame_counts[cameraContextValue])));
-                        disp_osd( cv_dst, CV_RGB(0x09,0x5E,0xFF), ptrGrabResult, frameToComplete, dur_convert, dur_resize, dur_togray, frame_rate );
+                        disp_osd( context, cv_dst, CV_RGB(0x09,0x5E,0xFF), ptrGrabResult, frameToComplete, dur_convert, dur_resize, dur_togray, frame_rate );
                     }
                     imshow(caption_for_im[cameraContextValue], cv_dst);
-                    bExitLoop = (waitKey(1) == CHAR_ESC);
+                    waitKey(1);
                 }
             }
         }
@@ -327,6 +337,7 @@ int do_pylon_proc( utContext *context )
 */
 
 static void disp_osd( 
+    utContext* ctx,
     cv::Mat cv_dst, 
     const Scalar& color_osd_background,
     CGrabResultPtr ptrGrabResult, 
@@ -341,36 +352,46 @@ static void disp_osd(
     int32_t y_step = 15;
     std::string s;
 
-    cv::rectangle( cv_dst, Rect(sx, offs_y, 200, 150), color_osd_background, -1 /*means FILL*/);
+
+    cv::Mat overlay = cv_dst(cv::Rect(sx, offs_y, 200, 100));
+    cv_dst.copyTo(overlay);
+
+    cv::rectangle( overlay, Rect(sx, offs_y, 200, 100), color_osd_background, -1 /*means FILL*/);
 
     uint64_t timestamp = ptrGrabResult->GetTimeStamp();
     s = "time: " + to_string(timestamp);
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
 
     s = "frames to stop: " + to_string(frameToComplete);
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
 
     s = "size: " + to_string(ptrGrabResult->GetWidth()) + "x" + to_string( ptrGrabResult->GetHeight());
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
 
     s = "convert: " + to_string(dur_convert) + "ms";
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
 
     s = "resize: " + to_string(dur_resize) + "ms";
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
 
     s = "to_gray: " + to_string(dur_togray) + "ms";
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
 
     uint32_t dur_total = dur_convert+dur_resize+dur_togray;
 
     s = "TOTAL: " + to_string(dur_total) + "ms, " + to_string(frame_rate) + "fps";
-    putText(cv_dst, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
+    putText(overlay, s, Point(sx,offs_y), FONT_HERSHEY_PLAIN, 1.0, CV_RGB(255,255,255), 1.0);
     offs_y += y_step;
+
+    double alpha = 0.7;
+    cv::addWeighted(overlay, alpha, cv_dst, 1.0 - alpha , 0.0, cv_dst);
+
+    int32_t ind_x = (abs(frameToComplete)* (ctx->preview_width()/10)) % ctx->preview_width();
+    cv::line(cv_dst, Point(ind_x, 0), Point(ind_x, ctx->preview_height()), CV_RGB(0x0,0xFF,0x0), 1, 4 );    
 }

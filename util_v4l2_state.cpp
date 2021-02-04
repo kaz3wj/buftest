@@ -28,6 +28,7 @@ using namespace std;
  * @return 
  * @note 
 */
+
 utV4l2_State* utV4l2_State::_pseudoThis = NULL;
 
 /**
@@ -62,6 +63,13 @@ utV4l2_State *utV4l2_State::instance()
  * @note 
 */
 utV4l2Stat_Closed* utV4l2Stat_Closed::_pseudoThis = NULL;
+
+
+utV4l2Stat_Closed:: ~utV4l2Stat_Closed() 
+{
+	cout << "~utV4l2Stat_Closed()" << endl;
+}
+
 
 /**
  * @brief 
@@ -113,19 +121,19 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 	fmt.type = camera->_type;
 
 	// fmt.fmt.pix.field = V4L2_FIELD_INTERLACED;
-	fmt.fmt.pix.width       = camera->_width;
-	fmt.fmt.pix.height      = camera->_height;
+	fmt.fmt.pix.width       = camera->_ctx_param->preview_width();
+	fmt.fmt.pix.height      = camera->_ctx_param->preview_height();
 	// fmt.fmt.pix.width = fmt1.fmt.pix.width;
 	// fmt.fmt.pix.height = fmt1.fmt.pix.height;
 
 	// fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV16;
 	// fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_UYVY;
 
-	// if (fmt.fmt.pix.pixelformat != fmt1.fmt.pix.pixelformat) {
-	// 	cout << "inquired: " << fourcc_text( fmt1.fmt.pix.pixelformat) << endl;
-	// 	cout << "set to  : " << fourcc_text(fmt.fmt.pix.pixelformat) << endl;
-		fmt.fmt.pix.pixelformat = fmt1.fmt.pix.pixelformat;
-	// }
+	if (camera->_ctx_param->pix_format() != fmt1.fmt.pix.pixelformat) {
+		cout << "current: " << utV4l2_Camera::fourcc_text( fmt1.fmt.pix.pixelformat) << endl;
+		fmt.fmt.pix.pixelformat = camera->_ctx_param->pix_format();
+		cout << "set to : " << utV4l2_Camera::fourcc_text( camera->_ctx_param->pix_format() ) << endl;
+	}
 
 	if (bDebugOut) {
 		cout << "S_FMT: pix.width: " << to_string(fmt.fmt.pix.width) << endl;
@@ -152,10 +160,9 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 
 	// init buffer
 	struct v4l2_requestbuffers req;
-	req.count               = camera->_page_count;
+	req.count               = camera->_ctx_param->page_count();
 	req.type                = camera->_type;
 	req.memory              = V4L2_MEMORY_USERPTR;
-
 
 	if (bDryrun) {
 		cout << UTCOL_BLUE << "VIDIOC_REQBUFS" << endl;
@@ -165,10 +172,10 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 			utV4l2_Camera::error_text("Failed to request v4l2 buffers: VIDIOC_REQBUFS");
 			return false;
 		}
-		if (req.count != camera->_page_count) {
+		if (req.count != camera->_ctx_param->page_count()) {
 			cout << UTCOL_RED 
 				<< "V4l2 buffer number (" << to_string(req.count)
-				<<") is not as desired (" << to_string(camera->_page_count) << ")"
+				<<") is not as desired (" << to_string(camera->_ctx_param->page_count()) << ")"
 				<< UTCOL_WHITE << endl;
 			return false;
 		}
@@ -192,11 +199,11 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 		size_t free_mem, total_mem;
 		cudaMemGetInfo(&free_mem, &total_mem);
 		cout << UTCOL_GREEN 
-			<< "[CUDA] Avail mem: " << to_string(free_mem/(1024*1024)) << "MB (" << to_string(free_mem) << " bytes)"
+			<< "[CUDA] Avail mem: " << to_string(free_mem/(1024*1024)) << " MB (" << to_string(free_mem) << " bytes)"
 			<< UTCOL_WHITE << endl;
 
 		cout << UTCOL_GREEN
-			 << "[CUDA] Total mem: " << to_string(total_mem/(1024*1024)) << "MB (" << to_string(total_mem) << " bytes)" 
+			 << "[CUDA] Total mem: " << to_string(total_mem/(1024*1024)) << " MB (" << to_string(total_mem) << " bytes)" 
 			 << UTCOL_WHITE << endl;
 	}
 
@@ -206,9 +213,9 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
 	uint32_t dur_qbuf = 0;
 	{
 		utTimer t("VIDIOC_QBUF", true);
-		for (size_t ii=0; ii<camera->_page_count; ii++)	{
+		for (size_t ii=0; ii<camera->_ctx_param->page_count(); ii++)	{
 				uint8_t* p_data = NULL;
-				cap = "[/dev/video" + to_string(camera->_dev_no) + "." + to_string(ii) + "] cudaMalloc(): " + to_string(alloc_size) + " bytes";
+				cap = "[/dev/video" + to_string(camera->_dev_no) + "." + to_string(ii) + "] PageSize(cudaMalloc): " + to_string(alloc_size/1024) + " KB";
 				{
 					utTimer t( cap, true);
 					// ref. https://developer.nvidia.com/blog/unified-memory-cuda-beginners/
@@ -293,7 +300,8 @@ bool utV4l2Stat_Closed::do_open(utV4l2_Camera *camera)
  * @return 
  * @note 
 */
-utV4l2Stat_Closed *utV4l2Stat_Closed::instance(){
+utV4l2Stat_Closed *utV4l2Stat_Closed::instance()
+{
 	if (!_pseudoThis) {
 		_pseudoThis = new utV4l2Stat_Closed();
 	}
@@ -307,6 +315,12 @@ utV4l2Stat_Closed *utV4l2Stat_Closed::instance(){
  * @return 
  * @note 
 */
+
+utV4l2Stat_Opened::~utV4l2Stat_Opened() 
+{ 
+	cout << "~utV4l2Stat_Opened()" << endl;
+}
+
 utV4l2Stat_Opened* utV4l2Stat_Opened::_pseudoThis = NULL;
 
 /**
@@ -317,15 +331,15 @@ utV4l2Stat_Opened* utV4l2Stat_Opened::_pseudoThis = NULL;
 */
 bool utV4l2Stat_Opened::do_close(utV4l2_Camera *camera)
 { 
-	// cout << "utV4l2Stat_Opened::do_close: " << camera->dev_name() << std::endl;
+	cout << "utV4l2Stat_Opened::do_close: " << camera->dev_name() << std::endl;
 
-	uint32_t dur_cudaFree = 0;
-	{
-		utTimer t("cudaFree", false);
-		for (uint8_t*& p_data : camera->_buf) {
-			cudaFree(p_data);
-		}
-	}
+	// uint32_t dur_cudaFree = 0;
+	// {
+	// 	utTimer t("cudaFree", false);
+	// 	for (uint8_t*& p_data : camera->_buf) {
+	// 		cudaFree(p_data);
+	// 	}
+	// }
 
 	if (-1 != camera->_fd) {
 		close(camera->_fd);
@@ -452,7 +466,7 @@ bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 			{
 				int32_t avg_dur = dur_frame / frame;
 				cout << ((0 == camera->_dev_no) ? UTCOL_CYAN : UTCOL_BLUE)
-						 << "Frame Duration(avg.): " << to_string(avg_dur) << " msec, " 
+						 << "Frame[" << to_string(frame) << "] : " << to_string(avg_dur) << " msec, " 
 						 << to_string(1000/avg_dur) << " fps"
 						 << UTCOL_WHITE << endl;
 			}
@@ -469,7 +483,20 @@ bool utV4l2Stat_Opened::do_start(utV4l2_Camera *camera)
 			return false;
 		}
 		cout << UTCOL_CYAN << "VIDIOC_STREAMOFF" << UTCOL_WHITE << endl;
+
+
+		uint32_t dur_cudaFree = 0;
+		{
+			utTimer t("cudaFree", true);
+			for (uint8_t*& p_data : camera->_buf) {
+				cudaFree(p_data);
+			}
+		}
+
+
 	}
+
+
 	return result;
 }
 
@@ -498,6 +525,9 @@ utV4l2Stat_Opened *utV4l2Stat_Opened::instance(){
 */
 utV4l2Stat_Running* utV4l2Stat_Running::_pseudoThis = NULL;
 
+utV4l2Stat_Running::~utV4l2Stat_Running() { 
+	cout << "~utV4l2Stat_Running()" << endl; 
+}
 
 /**
  * @brief 
@@ -525,3 +555,5 @@ utV4l2Stat_Running *utV4l2Stat_Running::instance(){
 	}
 	return _pseudoThis;
 }
+
+//////////////////////////////////////////////

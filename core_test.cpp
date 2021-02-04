@@ -29,15 +29,6 @@
 #include <signal.h>
 #include <poll.h>
 
-// #include "opencv2/highgui/highgui.hpp"
-// #include "opencv2/imgproc/imgproc.hpp"
-// #include "opencv2/core/cuda.hpp"
-// #include "opencv2/core/core.hpp"
-
-// #include <X11/Xlib.h>
-// #include <X11/Xutil.h>
-// #include <X11/Xos.h>
-
 #include "util_v4l2.h"
 #include "util_class.h"
 #include "util_context.h"

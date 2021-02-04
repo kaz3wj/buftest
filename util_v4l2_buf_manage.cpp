@@ -8,7 +8,7 @@
  * @return 
  * @note 
 */
-utV4l2_buf_manage::utV4l2_buf_manage(int fd)
+utV4l2_buf_manage::utV4l2_buf_manage(int& fd)
 	: _fd(fd)
 {
 	CLEAR(buf);

@@ -2,6 +2,16 @@
 #include <thread>
 #include <stdexcept>
 
+// Include files to use the pylon API.
+#include <pylon/PylonIncludes.h>
+#ifdef PYLON_WIN_BUILD
+#    include <pylon/PylonGUI.h>ifndef
+#endif
+
+// Namespace for using pylon objects.
+using namespace Pylon;
+
+
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/core/cuda.hpp"
@@ -45,10 +55,12 @@ int do_v4l2_proc(utContext* context)
     int exitCode = 0;
     vector<utV4l2_Camera*> cameras;
 
-    // vector<utV4l2_State> states;
-    // states.push_back(utV4l2Stat_Closed::instance());
-    // states.push_back(utV4l2Stat_Opened::instance());
-    // states.push_back(utV4l2Stat_Running::instance());
+
+	// Before using any pylon methods, 
+	// the pylon runtime must be initialized. 
+	// PylonInitialize();
+
+
 
     try
     {
@@ -121,29 +133,17 @@ int do_v4l2_proc(utContext* context)
             cout << "[" << cam->dev_name() << "] cleanup CAMERA: " << endl;
             delete cam;
         }
-
-        // state class
- #if 1
-        release_instance<utV4l2Stat_Closed>();
-
-#else
-        utV4l2Stat_Closed * s_closed = utV4l2Stat_Closed::instance();
-        if (s_closed) {
-            delete s_closed;
-        }
-        utV4l2Stat_Opened * s_opened = utV4l2Stat_Opened::instance();
-        if (s_opened) {
-            delete s_opened;
-        }
-        utV4l2Stat_Running * s_running = utV4l2Stat_Running::instance();
-        if (s_running) {
-            delete s_running;
-        }
-#endif
-
-
-
         dur_cleanup = t.elapsed();
     }
+
+    // Releases state class instance
+    release_state_instance<utV4l2Stat_Closed>();
+    release_state_instance<utV4l2Stat_Opened>();
+    release_state_instance<utV4l2Stat_Running>();
+
+ 	// Releases all pylon resources. 
+	// PylonTerminate();
+
+
     return exitCode;
 }

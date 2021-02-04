@@ -8,7 +8,7 @@
 class utV4l2_buf_manage
 {
 	public:
-		utV4l2_buf_manage(int fd);
+		utV4l2_buf_manage(int& fd);
 		virtual ~utV4l2_buf_manage();
 
 	public:
@@ -20,7 +20,7 @@ class utV4l2_buf_manage
 		virtual void do_free() {}
 
 	protected:
-		int _fd;
+		int& _fd;
 		struct v4l2_buffer buf;
 };
 
