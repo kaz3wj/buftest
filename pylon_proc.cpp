@@ -83,6 +83,10 @@ int do_pylon_proc( utContext *context )
 
     int exitCode = 0;
 
+	// Before using any pylon methods, 
+	// the pylon runtime must be initialized. 
+	PylonInitialize();
+
     try
     {
         // Get the transport layer factory.
@@ -308,7 +312,9 @@ int do_pylon_proc( utContext *context )
         exitCode = 1;
     }
 
- 
+ 	// Releases all pylon resources. 
+	PylonTerminate();
+
     return exitCode;
 }
 
